@@ -10,7 +10,7 @@ class SimpleCNN():
 	共两个卷积层,两个池化层及Softmax分类层
 	'''
 	
-	def __init__(self, img_h=28, img_w=28, n_hidden=1024, n_output=10, batch_size=128, epoches = 2000):
+	def __init__(self, img_h=28, img_w=28, n_hidden=1024, n_output=10, batch_size=128, epoches = 100, err_threshold = 1e-2):
 		'''
 		CNN网络的初始化
 		Args:
@@ -20,6 +20,7 @@ class SimpleCNN():
 			n_output: 全连接网络中的输出层节点数
 			batch_size: mini_batch大小
 			epoches: 迭代次数
+			err_threshold: 训练误差阈值,控制训练深度
 		'''
 		self.img_h = img_h
 		self.img_w = img_w
@@ -27,6 +28,7 @@ class SimpleCNN():
 		self.n_output = n_output
 		self.batch_size = batch_size
 		self.epoches = epoches
+		self.err_threshold = err_threshold
 		self.x = tf.placeholder(tf.float32, [None,img_h*img_w])
 		self.y = tf.placeholder(tf.float32, [None,n_output])
 		self.keep_prob = tf.placeholder(tf.float32)
@@ -158,19 +160,21 @@ class SimpleCNN():
 		y_ = self.build_net()
 		loss = tf.reduce_mean(-tf.reduce_sum(self.y*tf.log(y_), 1))
 		train_op = tf.train.AdamOptimizer(1e-4).minimize(loss)
-		predicts = tf.equal(tf.argmax(self.y), tf.argmax(y_, 1))
-		accuracy = tf.cast(predicts, tf.float32)
+		predicts = tf.equal(tf.argmax(self.y, 1), tf.argmax(y_, 1))
+		accuracy = tf.reduce_mean(tf.cast(predicts, tf.float32))
 		with tf.Session() as sess:
 			init = tf.global_variables_initializer()
 			sess.run(init)
-			for epoches in range(200):
+			for epoch in range(self.epoches):
 				for bat,(batch_train_x, batch_train_y) in enumerate(self.obtain_mini_batch(train_x, train_y)):
 					_, cost = sess.run([train_op, loss], feed_dict={self.x:batch_train_x, self.y:batch_train_y, self.keep_prob:0.5})
 					if bat % 100 == 0:
 						train_loss = sess.run(loss, feed_dict={self.x:batch_train_x, self.y:batch_train_y, self.keep_prob:1})
 						print('train loss {:>6.3f}'.format(train_loss))
-			test_loss = sess.run(loss, feed_dict={self.x:test_x, self.y:test_y, self.keep_prob:1})
-			print('test loss {:>6.3f}'.format(test_loss))
+				if train_loss <= self.err_threshold:
+					break
+			test_accuracy = sess.run(accuracy, feed_dict={self.x:test_x, self.y:test_y, self.keep_prob:1})
+			print('test accuracy {:>6.3f}'.format(test_accuracy))
 			
 if __name__ == '__main__':
 	cnn = SimpleCNN()
